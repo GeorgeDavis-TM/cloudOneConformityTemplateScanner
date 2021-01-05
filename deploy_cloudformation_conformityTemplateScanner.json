@@ -1,0 +1,226 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Trend Micro Conformity Template Scanner App",
+    "Parameters": {
+        "ApiGatewayName": {
+            "Type": "String",
+            "Default": "CloudConformityTemplateScanner"
+        },
+        "ApiGatewayDescription": {
+            "Type": "String",
+            "Default": "Trend Micro Conformity Template Scanner GitHub App"
+        },
+        "ApiGatewayStageName": {
+            "Type": "String",
+            "Default": "v1"
+        },
+        "ApiGatewayPath": {
+            "Type": "String",
+            "Default": "conformityTemplateScanner"
+        },
+        "LambdaFunctionName": {
+            "Type": "String",
+            "Default": "ConformityTemplateScanner"
+        },
+        "LambdaFunctionDescription": {
+            "Type": "String",
+            "Default": "Trend Micro Conformity Template Scanner & GitHub API Integration"
+        },
+        "ConformityApiKey": {
+            "Type": "String",
+            "Default": ""
+        },
+        "GitHubToken": {
+            "Type": "String",
+            "Default": ""
+        }
+    },
+    "Resources": {
+        "ApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Ref": "ApiGatewayName"
+                },
+                "Description": {
+                    "Ref": "ApiGatewayDescription"
+                }
+            }
+        },
+        "ApiGatewayResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": {
+                    "Ref": "ApiGatewayPath"
+                }
+            }
+        },
+        "ApiGatewayGetMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "IntegrationHttpMethod": "POST",
+                    "Type": "AWS_PROXY",
+                    "Uri": {
+                        "Fn::Sub": [
+                            "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations",
+                            {
+                                "lambdaArn": {
+                                    "Fn::GetAtt": [
+                                        "LambdaFunction",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiGatewayGetMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "StageName": {
+                    "Ref": "ApiGatewayStageName"
+                }
+            }
+        },
+        "LambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": { 
+                "Code": {
+                    "ZipFile": "import os\nimport json\nimport urllib3\nimport datetime\n\ndef githubLabelsApi(http, githubApiUrl):\n\tlabels = {\"EXTREME\": \"B60205\",\"VERY_HIGH\": \"B60205\",\"HIGH\": \"B60205\",\"MEDIUM\": \"D93F0B\",\"LOW\": \"FBCA04\"}\n\theader = {\"Accept\": \"application/vnd.github.v3+json\",\"User-Agent\": \"PostmanRuntime/7.26.8\",\"Authorization\": \"token \" + str(os.environ.get('GITHUB_TOKEN'))}\n\tfor label in labels:\n\t\tdata = {\"name\": label,\"color\": labels[label],\"description\": \"Trend Micro Cloud One Conformity - \" + label}\n\t\tr = http.request('POST', githubApiUrl + \"/labels\", headers=header, body=json.dumps(data))\n\t\tprint(str(r.data))\n\ndef githubIssuesApi(http, githubHtmlUrl, githubApiUrl, commit, filename, reportTitle, reportSummaryList, reportDetail):\n\theader = {\"Accept\": \"application/vnd.github.v3+json\",\"User-Agent\": \"PostmanRuntime/7.26.8\",\"Authorization\": \"token \" + str(os.environ.get('GITHUB_TOKEN'))}\n\tdata = {\"title\": \"Cloud Conformity Template Scanner Report for \" + filename + \":\" + commit[\"id\"],\"body\": \"# Cloud Conformity Template Scanner Report for [\" + filename + \"](\" + githubHtmlUrl + \"/blob/\" + commit[\"id\"] + \"/\" + filename + \")\\n### Commit ID - \" + commit[\"id\"] + \"\\n### Issue Summary - \\n\" + reportTitle.replace(\" \", \"\\n\").replace(\":\", \": \") + \"\\n### List of Trend Micro Cloud One Conformity Issues are as below.\\n\" + str(json.dumps(reportDetail)),\"labels\": reportSummaryList}\n\tr = http.request('POST', githubApiUrl + \"/issues\", headers=header, body=json.dumps(data))\n\tprint(str(r.data))\n\treturn {'headers': {\"Content-type\": \"application/json\" },'statusCode': 200,'body': str(r.data)}\n\ndef githubTaggerApi(http, githubApiUrl, commit, tagValue):\n\theader = {\"Accept\": \"application/vnd.github.v3+json\",\"User-Agent\": \"PostmanRuntime/7.26.8\",\"Authorization\": \"token \" + str(os.environ.get('GITHUB_TOKEN'))}\n\tdata = {\"tag\": str(tagValue),\"object\": commit[\"id\"],\"message\": \"Cloud Conformity Template Scanner Report - https://us-west-2.cloudconformity.com/template-scanner\",\"tagger\": {\"name\": commit[\"committer\"][\"name\"],\"email\": commit[\"committer\"][\"email\"],\"date\": commit[\"timestamp\"]},\"type\": \"commit\"}\n\tr = http.request('POST', githubApiUrl + \"/git/tags\", headers=header, body=json.dumps(data))\n\tprint(str(r.data))\n\treturn {'headers': { \"Content-type\": \"application/json\" },'statusCode': 200,'body': str(r.data)}\n\ndef postConformityApi(ccApiKey, http, githubHtmlUrl, githubApiUrl, commit, filename, githubFileString):\n\theaders = {\"Content-Type\": \"application/vnd.api+json\",\"Authorization\": \"ApiKey \" + ccApiKey}\n\tdata = {\"data\": {\"attributes\": {\"type\": \"cloudformation-template\",\"contents\": githubFileString}}}\n\tr = http.request('POST', 'https://us-west-2-api.cloudconformity.com/v1/template-scanner/scan', headers=headers, body=json.dumps(data))\n\tresponseDict = json.loads(r.data)\n\treportDict = {}\n\tfor data in responseDict[\"data\"]:\n\t\tif data[\"type\"] == \"checks\":\n\t\t\tif str(data[\"attributes\"][\"risk-level\"]) not in reportDict:\n\t\t\t\treportDict.update({ data[\"attributes\"][\"risk-level\"]: 1 })\n\t\t\telse:\n\t\t\t\treportDict.update({ data[\"attributes\"][\"risk-level\"]: reportDict[data[\"attributes\"][\"risk-level\"]] + 1 })\n\treportList = []\n\treportTitle = \"\"\n\tfor severity in reportDict:\n\t\treportList.append(severity)\n\t\treportTitle += severity + \":\" + str(reportDict[severity]) + \" \"\n\tgithubIssuesApi(http, githubHtmlUrl, githubApiUrl, commit, filename, reportTitle, reportList, responseDict)\n\treturn reportDict\n\ndef processJsonFile(ccApiKey, http, githubHtmlUrl, githubRawFileUrl, githubApiUrl, commit, filename):\n\tgithubFileString = \"\"\n\tr = http.request('GET', githubRawFileUrl)\n\tgithubFileString = (r.data).decode(\"utf-8\")\n\tcfJsonDict = json.loads(githubFileString)\n\tif \"AWSTemplateFormatVersion\" in cfJsonDict:\n\t\tresponse = postConformityApi(ccApiKey, http, githubHtmlUrl, githubApiUrl, commit, filename, str(githubFileString))\n\t\tfor severity in response:\n\t\t\tgithubTaggerApi(http, githubApiUrl, commit, str(severity))\n\ndef processYamlFile(ccApiKey, http, githubHtmlUrl, githubRawFileUrl, githubApiUrl, commit, filename):\n\tgithubFileString = \"\"\n\tr = http.request('GET', githubRawFileUrl)\n\tgithubFileString = (r.data).decode(\"utf-8\")\n\tif \"AWSTemplateFormatVersion\" in githubFileString:\n\t\tresponse = postConformityApi(ccApiKey, http, githubHtmlUrl, githubApiUrl, commit, filename, str(githubFileString))\n\t\tfor severity in response:\n\t\t\tgithubTaggerApi(http, githubApiUrl, commit, str(severity))\n\ndef lambda_handler(event, context):\n\tccApiKey = str(os.environ.get('CC_API_KEY'))\n\tsupportedFileExtensions = [\"json\", \"yaml\", \"yml\"]\n\tprint(\"\nEvent: \" + str(event))\n\tprint(\"\nContext: \" + str(context))\n\thttpBody = json.loads(event[\"body\"])\n\tgithubApiUrl = \"https://api.github.com/repos/\" + httpBody[\"repository\"][\"full_name\"]\n\tgithubHtmlUrl = httpBody[\"repository\"][\"html_url\"]\n\thttp = urllib3.PoolManager()\n\tgithubLabelsApi(http, httpBody[\"repository\"])\n\tfilesInvolved = []\n\tfor commit in httpBody[\"commits\"]:\n\t\tfilesInvolved = commit[\"added\"] + commit[\"modified\"]\n\t\tprint(str(filesInvolved))\n\t\tfor filename in filesInvolved:\n\t\t\tif ccApiKey != \"\" and filename.split(\".\")[-1].lower() in supportedFileExtensions:\n\t\t\t\tgithubRawFileUrl = \"https://raw.githubusercontent.com/\" + httpBody[\"repository\"][\"full_name\"] + \"/\" + commit[\"id\"] + \"/\" + filename\n\t\t\t\tif filename.split(\".\")[-1].lower() == \"json\":\n\t\t\t\t\tprocessJsonFile(ccApiKey, http, githubHtmlUrl, githubRawFileUrl, githubApiUrl, commit, filename)\n\t\t\t\telif filename.split(\".\")[-1].lower() == \"yaml\" or filename.split(\".\")[-1].lower() == \"yml\":\n\t\t\t\t\tprocessYamlFile(ccApiKey, http, githubHtmlUrl, githubRawFileUrl, githubApiUrl, commit, filename)\n\t\t\telse:\n\t\t\t\tprint(str(\"Not a supported file.\"))"
+                },
+                "Description": {
+                    "Ref": "LambdaFunctionDescription"
+                },
+                "FunctionName": {
+                    "Ref": "LambdaFunctionName"
+                },
+                "Handler": "index.lambda_handler",
+                "MemorySize": 128,
+                "Role": {
+                    "Fn::GetAtt": [
+                        "lambdaIAMRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.7",
+                "Timeout": 40,
+                "Environment": {
+                    "Variables": {
+                        "CC_API_KEY": {
+                            "Ref": "ConformityApiKey"
+                        }
+                    }
+                }
+            }
+        },
+        "lambdaApiGatewayInvoke": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "LambdaFunction",
+                        "Arn"
+                    ]
+                },
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+                },
+                "Principal": "apigateway.amazonaws.com"
+            }
+        },
+        "lambdaIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Effect": "Allow",
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaFunctionName}:*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        "PolicyName": "lambda"
+                    }
+                ]
+            }
+        },
+        "lambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${LambdaFunctionName}"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "AppUrl": {
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayStageName}/${ApiGatewayPath}"
+            }
+        }
+    }
+}

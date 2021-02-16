@@ -49,7 +49,7 @@ The `sample_cloudformation_template.json` file is provided to upload to a config
 - Run the CloudFormation template on AWS. Retrieve the `API Endpoint URL` from the `Outputs` tab.
 
 - Configure GitHub Repository for webhooks
-    - Navigate to your `GitHub Repository > Settings > Webhooks`
+    - Navigate to your `<Your-GitHub-Repository> > Settings > Webhooks`
     - Enter the API Endpoint URL from the CloudFormation Stack as the `Payload URL`
     - Set the Content Type to `application/json`
     - Choose `Just the push event` under "Which events would you like to trigger this webhook?"
@@ -62,3 +62,21 @@ The `sample_cloudformation_template.json` file is provided to upload to a config
 
 - You can now filter the issues with GitHub Labels.
     - The supported Cloud One Conformity labels are `EXTREME`, `VERY_HIGH`, `HIGH`, `MEDIUM` and `LOW`
+
+
+### Related Projects
+
+| GitHub Repository Name  | Description |
+| ------------- | ------------- |
+| [ConformityTemplateScanner-AWS-CodeCommit](https://github.com/GeorgeDavis-TM/ConformityTemplateScanner-AWS-CodeCommit) | Similar to this repository but catered to AWS CodeCommit repositories |
+
+## Contributing
+
+If you encounter a bug or think of a useful feature, or find something confusing in the docs, please
+**[Create a New Issue](https://github.com/GeorgeDavis-TM/cloudOneConformityTemplateScanner/issues/new)**
+
+ **PS.: Make sure to use the [Issue Template](https://github.com/GeorgeDavis-TM/cloudOneConformityTemplateScanner/tree/master/.github/ISSUE_TEMPLATE)**
+
+We :heart: pull requests. If you'd like to fix a bug or contribute to a feature or simply correct a typo, please feel free to do so.
+
+If you're thinking of adding a new feature, consider opening an issue first to discuss it to ensure it aligns to the direction of the project (and potentially save yourself some time!).
